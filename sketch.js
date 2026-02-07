@@ -830,7 +830,7 @@ function drawMenu() {
   // Instructions at bottom
   fill(100, 150, 200);
   textSize(14);
-  textAlign(CENTER);
+  textAlign(CENTER, TOP);
   text(
     "Collect stars ⭐ to grow | Avoid mines 🛑 | Defeat other vehicles",
     width / 2,
@@ -840,6 +840,22 @@ function drawMenu() {
     "Controls: Move mouse to steer | Space or Click to dash",
     width / 2,
     height - 60,
+  );
+
+  // Developer credits with background for visibility
+  fill(20, 30, 60, 200);
+  stroke(150, 200, 255);
+  strokeWeight(1);
+  rect(width / 2 - 320, height - 45, 640, 35, 5);
+
+  fill(255, 255, 255);
+  textSize(16);
+  textAlign(CENTER, CENTER);
+  textStyle(NORMAL);
+  text(
+    "Game developed by Mouhssine Jaiba & Hamza ech-choukairi",
+    width / 2,
+    height - 27,
   );
 }
 

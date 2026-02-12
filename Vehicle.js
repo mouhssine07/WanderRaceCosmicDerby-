@@ -38,6 +38,7 @@ class Vehicle {
     this.mass = 100; // Current Mass
     this.targetMass = 100; // Target Mass for smooth growth
     this.minMass = 50;
+    this.growthPulse = 0; // Visual pulse effect when growing (0-1)
 
     // Wander behavior parameters
     this.distanceCercle = 100;
@@ -71,10 +72,22 @@ class Vehicle {
     this.damageMult = 1.0;
 
     this.speedMult = 1.0;
-    this.accelMult = 1.0;
+    this.accelMult = 1.0; // Powerup multiplier
+    this.massAccelMult = 1.0; // Base mass multiplier
+    this.massTurnMult = 1.0; // Base mass multiplier
 
     // Visual Effects (Floating Text)
     this.popups = [];
+
+    // COMBO SYSTEM
+    this.killStreak = 0;
+    this.lastKillFrame = 0;
+    this.comboTimer = 0; // Duration of active combo rewards
+    this.doubleXP = false;
+
+    // GAME MODES
+    this.team = null; // 1 or 2
+    this.isInfected = false;
   }
 
   updateSize() {
@@ -86,7 +99,13 @@ class Vehicle {
       return;
     }
 
-    // 1. Smooth Mass Growth
+    // 1. Smooth Mass Growth & DECAY
+    // MASS DECAY: Large vehicles lose mass over time (Agar.io style)
+    if (this.targetMass > 200) {
+      // Lose ~0.02% of mass per frame when large
+      this.targetMass -= this.targetMass * 0.0002;
+    }
+
     if (abs(this.targetMass - this.mass) > 0.5) {
       this.mass = lerp(this.mass, this.targetMass, 0.05);
     } else {
@@ -98,21 +117,36 @@ class Vehicle {
     this.r = Math.max(5, this.initialR * Math.sqrt(this.mass / 100)); // Min radius 5
 
     // 3. Scale Stats
-    // Health: +50 HP for every 100 extra mass
-    let extraHealth = (this.mass - 100) * 0.5;
-    this.maxHealth = this.baseMaxHealth + extraHealth;
+    // Health: Using Square Root scaling to avoid "Giant Tank" unkillable problem
+    // Formula: 50 + 50 * sqrt(mass/100)
+    // Results: 100 mass = 100hp, 400 mass = 150hp, 900 mass = 200hp
+    this.maxHealth = 50 + 50 * Math.sqrt(this.mass / 100);
 
-    // Damage: +0.5x damage for every 100 extra mass
-    let extraDamage = (this.mass - 100) * 0.005; // 0.5 / 100
+    // Decay growth pulse
+    if (this.growthPulse > 0) {
+      this.growthPulse *= 0.92; // Smooth decay
+      if (this.growthPulse < 0.01) this.growthPulse = 0;
+    }
+
+    // Damage: +1.0x damage for every 100 extra mass (DOUBLED for Agar.io feel)
+    let extraDamage = (this.mass - 100) * 0.01; // 1.0 / 100
     this.baseDamageMult = 1.0 + Math.max(0, extraDamage);
 
-    // SPEED SCALING: Heavier = Slower (User requested inverse formula)
-    // Formula: Scale factor starts at 1.0 for Mass 100.
-    // Factor = 200 / (100 + mass)
-    // Mass 100 -> 200/200 = 1.0
-    // Mass 200 -> 200/300 = 0.66
-    // Mass 300 -> 200/400 = 0.50
-    let speedFactor = 200 / (100 + this.mass);
+    // Push Force: Used in collisions to repel smaller vehicles
+    this.pushForce = 1.0 + (this.mass - 100) * 0.015;
+
+    // THE WEIGHT TAX: Scale Acceleration and Turn Speed (Inverse to mass)
+    // Formula for Accel: 200 / (100 + mass)
+    this.massAccelMult = 200 / (100 + this.mass);
+    // Formula for Turn: 250 / (150 + mass)
+    this.massTurnMult = 250 / (150 + this.mass);
+
+    // SPEED SCALING: Better mobility for larger vehicles (Buffered Formula)
+    // Formula: Scale factor = 300 / (200 + mass)
+    // Mass 100 -> 300/300 = 1.0
+    // Mass 400 -> 300/600 = 0.5
+    // Mass 1000 -> 300/1200 = 0.25 (Faster than previous 0.18)
+    let speedFactor = 300 / (200 + this.mass);
     this.maxSpeed = Math.max(
       this.minSpeedLimit,
       this.baseMaxSpeed * speedFactor,
@@ -252,6 +286,19 @@ class Vehicle {
 
     // Update One-Time Status Effects
     this.updateStatusEffects();
+
+    // Kill Streak decay/timeout
+    if (this.killStreak > 0 && frameCount - this.lastKillFrame > 300) { // 5s timeout
+        this.killStreak = 0;
+    }
+    
+    // XP Boost decay
+    if (this.comboTimer > 0) {
+        this.comboTimer--;
+        if (this.comboTimer === 0) {
+            this.doubleXP = false;
+        }
+    }
   }
 
   updateStatusEffects() {
@@ -299,6 +346,11 @@ class Vehicle {
       this.speedMult = 1.0;
       this.accelMult = 1.0;
     }
+
+    // INFECTION: +50% speed for infected
+    if (this.isInfected) {
+        this.speedMult *= 1.5;
+    }
   }
 
   /**
@@ -345,23 +397,36 @@ class Vehicle {
    * Draw the vehicle and its trail
    */
   show() {
+    this.drawModeAura();
     // Draw rainbow trail based on speed
     this.drawTrail();
 
-    // Draw vehicle
+    // Draw vehicle with growth pulse effect
     push();
     translate(this.pos.x, this.pos.y);
     rotate(this.vel.heading());
 
+    // Apply growth pulse to size
+    let displayR = this.r * (1 + this.growthPulse * 0.2);
+
     if (this.image) {
       imageMode(CENTER);
-      let size = this.r * 2;
+      let size = displayR * 2;
       rotate(-PI / 2); // Adjust for sprite orientation
       image(this.image, 0, 0, size, size);
     } else {
       strokeWeight(1);
-      triangle(-this.r, -this.r / 2, -this.r, this.r / 2, this.r, 0);
+      triangle(-displayR, -displayR / 2, -displayR, displayR / 2, displayR, 0);
     }
+
+    // Golden aura during growth pulse
+    if (this.growthPulse > 0.1) {
+      noFill();
+      stroke(255, 215, 0, this.growthPulse * 150);
+      strokeWeight(3);
+      circle(0, 0, displayR * 2.5);
+    }
+
     pop();
 
     // Status Visuals
@@ -458,10 +523,10 @@ class Vehicle {
       fill(p.color);
       noStroke();
       textAlign(CENTER);
-      textSize(14);
+      textSize(12 * UI_SCALE); // Scaled
       // Fade out
       drawingContext.globalAlpha = map(p.life, 0, 20, 0, 1, true);
-      text(p.text, 0, -this.r * 2 - 20 + p.yOffset);
+      text(p.text, 0, -this.r * 2 - 20 * UI_SCALE + p.yOffset);
       drawingContext.globalAlpha = 1.0;
 
       if (p.life <= 0) this.popups.splice(i, 1);
@@ -477,20 +542,22 @@ class Vehicle {
     // Dash bar is at +35. Let's put this at +45 to stack if needed, or just +35 if they share space (rarely overlap dash?).
     // Actually dash is Player specific. Powerups are generic.
     // Let's put it at +40 (underneath)
-    translate(0, this.r * 2 + 5);
+    translate(0, this.r * 2 + 5 * UI_SCALE);
 
     noStroke();
 
     // Background
     fill(50, 150);
     rectMode(CENTER);
-    rect(0, 0, 40, 6, 3); // generic background rounded
+    let barW = 40 * UI_SCALE;
+    let barH = 6 * UI_SCALE;
+    rect(0, 0, barW, barH, 3 * UI_SCALE); // generic background rounded
 
     // Foreground Bar
     fill(c);
     rectMode(CORNER);
-    let w = map(current, 0, maxVal, 0, 40);
-    rect(-20, -3, w, 6, 3);
+    let w = map(current, 0, maxVal, 0, barW);
+    rect(-barW/2, -barH/2, w, barH, 3 * UI_SCALE);
 
     pop();
   }
@@ -504,7 +571,13 @@ class Vehicle {
    * Draw the vehicle's trail with rainbow colors based on speed
    */
   drawTrail() {
+    if (this.path.length < 2) return;
+    
+    // Switch to HSB once before the loop - HUGE performance gain
+    push();
+    colorMode(HSB, 360, 100, 100, 255);
     noStroke();
+    
     for (let i = 0; i < this.path.length; i++) {
       let p = this.path[i];
 
@@ -514,28 +587,50 @@ class Vehicle {
       // Hue based on speed (slow = blue, fast = red)
       let hue = map(p.speed, 0, this.maxSpeed, 200, 0);
 
-      push();
-      colorMode(HSB, 360, 100, 100, 255);
       fill(hue, 80, 100, alpha);
       let size = map(i, 0, this.path.length, 2, 6);
       circle(p.pos.x, p.pos.y, size);
-      pop();
     }
+    
+    pop();
+  }
+
+  drawModeAura() {
+      push();
+      translate(this.pos.x, this.pos.y);
+      noFill();
+      strokeWeight(3);
+      
+      if (this.isInfected) {
+          stroke(150, 0, 255, 150 + sin(frameCount * 0.1) * 100);
+          circle(0, 0, this.r * 2.5);
+      } else if (this.team === 1) {
+          stroke(0, 255, 255, 150);
+          circle(0, 0, this.r * 2.2);
+      } else if (this.team === 2) {
+          stroke(255, 100, 0, 150);
+          circle(0, 0, this.r * 2.2);
+      }
+      pop();
   }
 
   /**
    * Wrap around screen edges (toroidal topology)
    */
   edges() {
-    if (this.pos.x > width + this.r) {
+    // Use world bounds, not canvas bounds (width/height are canvas pixels)
+    const WORLD_W = 5000;
+    const WORLD_H = 5000;
+    
+    if (this.pos.x > WORLD_W + this.r) {
       this.pos.x = -this.r;
     } else if (this.pos.x < -this.r) {
-      this.pos.x = width + this.r;
+      this.pos.x = WORLD_W + this.r;
     }
-    if (this.pos.y > height + this.r) {
+    if (this.pos.y > WORLD_H + this.r) {
       this.pos.y = -this.r;
     } else if (this.pos.y < -this.r) {
-      this.pos.y = height + this.r;
+      this.pos.y = WORLD_H + this.r;
     }
   }
 
@@ -547,14 +642,81 @@ class Vehicle {
   }
 
   /**
-   * Apply damage to vehicle
-   * @param {number} amount
+   * Universal Damage Resolver
+   * @param {number} amount - Raw damage value
    */
   takeDamage(amount) {
+    if (this.isDead) return;
+    
     this.health -= amount;
+    
+    // Haptic Feedback for Player
+    if (this === player && typeof mobileManager !== 'undefined') {
+        mobileManager.vibrate(20); // Short 20ms buzz
+    }
+    
+    // Impact Visuals (Minor sparks on hit)
+    if (typeof particles !== 'undefined') {
+        particles.explode(this.pos.x, this.pos.y, 5, 0); 
+    }
+
     if (this.health <= 0) {
       this.health = 0;
       this.isDead = true;
     }
+  }
+
+  /**
+   * Reward vehicle for a kill
+   */
+  onKill() {
+    this.killStreak++;
+    this.lastKillFrame = frameCount;
+    
+    let rewardText = "";
+    if (this.killStreak === 3) {
+      rewardText = "TRIPLE KILL - SHIELD!";
+      this.applyPowerup("shield");
+      this.shieldTimer = 180; // 3s
+    } else if (this.killStreak === 5) {
+      rewardText = "RAMPAGE - DOUBLE XP!";
+      this.doubleXP = true;
+      this.comboTimer = 600; // 10s
+    } else if (this.killStreak === 10) {
+      rewardText = "UNSTOPPABLE - SHOCKWAVE!";
+      this.triggerShockwave();
+    }
+
+    if (rewardText !== "") {
+      this.addPopup(rewardText, color(255, 50, 255));
+    } else {
+      this.addPopup(`KILL x${this.killStreak}`, color(255, 255, 255));
+    }
+
+    // Persistent Profile update for player
+    if (this === player && typeof profile !== 'undefined') {
+        profile.addKill();
+        profile.addXP(200); // 200 XP per kill
+    }
+  }
+
+  triggerShockwave() {
+      // Logic for shockwave handled in sketch.js or a separate particle effect
+      this.addPopup("⚡ SHOCKWAVE ⚡", color(255, 255, 0));
+      // Visual blast
+      if (typeof particles !== 'undefined') {
+          particles.explode(this.pos.x, this.pos.y, 100, 200); // Massive blue/white blast
+      }
+      
+      // Affect nearby obstacles/mines
+      if (typeof obstacles !== 'undefined') {
+          for (let obs of obstacles) {
+              if (p5.Vector.dist(this.pos, obs.pos) < 400) {
+                  let push = p5.Vector.sub(obs.pos, this.pos).setMag(50);
+                  obs.pos.add(push);
+                  obs.health -= 50; // Damage mines
+              }
+          }
+      }
   }
 }

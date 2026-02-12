@@ -90,6 +90,8 @@ class ParticleSystem {
   
   constructor() {
     this.particles = [];
+    this.lowPerformanceMode = false;
+    this.MAX_PARTICLES = 300; // Hard limit for mobile stability
   }
 
   /**
@@ -100,10 +102,18 @@ class ParticleSystem {
    * @param {number} hue - Base hue for color variety (optional)
    */
   explode(x, y, count = 60, hue = null) {
+    if (this.particles.length > this.MAX_PARTICLES) return; // Drop explosion if overloaded
+    
+    if (this.lowPerformanceMode) count = Math.floor(count / 2);
     for (let i = 0; i < count; i++) {
       // Vary hue slightly for each particle
       let particleHue = hue !== null ? (hue + random(-30, 30) + 360) % 360 : null;
       this.particles.push(new Particle(x, y, particleHue));
+    }
+    
+    // Safety trim
+    if (this.particles.length > this.MAX_PARTICLES + 100) {
+        this.particles.splice(0, this.particles.length - this.MAX_PARTICLES);
     }
   }
 

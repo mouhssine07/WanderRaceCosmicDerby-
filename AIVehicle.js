@@ -43,60 +43,86 @@ class AIVehicle extends Vehicle {
    * @param {Obstacle[]} obstacles
    */
   think(player, points, stars, obstacles) {
-    // defaults
     let speedMult = 0.8; // Idle speed
-
     let distToPlayer = p5.Vector.dist(this.pos, player.pos);
+    let massRatio = this.mass / player.mass;
 
-    // 1. STATE EVALUATION
-
-    // Default: IDLE
-    this.currentState = "idle";
-    speedMult = 0.8;
-
-    // Check AVOID (Priority 1)
-    if (distToPlayer < 150) {
-      this.currentState = "avoid";
-      speedMult = 1.1;
-    }
-    // Check CHASE/SEEK (Priority 2)
-    else {
-      // Look for targets (Points + Stars)
-      let bestTarget = null;
-      let lowestDist = Infinity;
-
-      // Check Powerups
+    // 1. STATE EVALUATION & TACTICS
+    
+    // PRIORITY 1: GLOBAL SURVIVAL (Heal Search)
+    if (this.health < this.maxHealth * 0.4) {
+      let healTarget = null;
+      let minHealDist = Infinity;
       for (let p of points) {
-        let d = p5.Vector.dist(this.pos, p.pos);
-        if (d < lowestDist) {
-          lowestDist = d;
-          bestTarget = p;
-        }
-      }
-
-      // Check Stars (Prioritize slightly?)
-      if (stars) {
-        for (let s of stars) {
-          let d = p5.Vector.dist(this.pos, s.pos);
-          // Stars are valuable, maybe treat distance as smaller
-          let heuristic = d * 0.9;
-          if (heuristic < lowestDist) {
-            lowestDist = heuristic;
-            bestTarget = s;
+        if (p.type === 'heal') {
+          let d = p5.Vector.dist(this.pos, p.pos);
+          if (d < minHealDist) {
+            minHealDist = d;
+            healTarget = p;
           }
         }
       }
+      if (healTarget) {
+        this.currentState = "heal_seek";
+        this.targetPoint = healTarget;
+        speedMult = 1.1;
+      }
+    }
+    
+    // PRIORITY 2: INTERACTION WITH PLAYER
+    if (this.currentState !== "heal_seek") {
+      // Scouts avoid combat at all costs
+      let threatDist = this.aiClass === "scout" ? 600 : 400;
 
-      if (bestTarget) {
-        this.targetPoint = bestTarget;
-
-        // CHASE if close
-        if (lowestDist < 400) {
-          this.currentState = "chase";
+      if (distToPlayer < threatDist) {
+        if (massRatio > 1.3 && this.aiClass !== "scout") {
+          // PREDATOR: I HUNT
+          this.currentState = "hunt";
           speedMult = 1.25;
         } else {
+          // PREY: I AVOID
+          this.currentState = "avoid";
+          speedMult = 1.2;
+        }
+      } else {
+        // PRIORITY 3: GROWTH & POWERUP STRATEGY
+        let bestTarget = null;
+        let lowestHeuristic = Infinity;
+
+        // TACTICAL POWERUP PICKUP
+        for (let p of points) {
+          let d = p5.Vector.dist(this.pos, p.pos);
+          let h = d;
+          
+          // Tactical Weighting
+          if (p.type === 'shield' && this.health < this.maxHealth * 0.7) h *= 0.5; // High priority for shield if slightly damaged
+          if (p.type === 'power' && this.currentState === "hunt") h *= 0.3; // Very high priority if hunting
+          
+          if (h < lowestHeuristic) {
+            lowestHeuristic = h;
+            bestTarget = p;
+          }
+        }
+
+        // STARS (Growth focus)
+        if (stars) {
+          for (let s of stars) {
+            let d = p5.Vector.dist(this.pos, s.pos);
+            let h = d * (this.aiClass === "scout" ? 0.4 : 0.8); // Scouts are star-obsessed
+            if (h < lowestHeuristic) {
+              lowestHeuristic = h;
+              bestTarget = s;
+            }
+          }
+        }
+
+        if (bestTarget) {
+          this.targetPoint = bestTarget;
           this.currentState = "seek";
           speedMult = 1.0;
+        } else {
+          this.currentState = "idle";
+          speedMult = 0.7;
         }
       }
     }
@@ -104,16 +130,17 @@ class AIVehicle extends Vehicle {
     // 2. TARGET ANGLE CALCULATION
 
     if (this.currentState === "idle") {
-      // Wander randomly
       if (frameCount % 60 === 0 || random() < 0.02) {
         this.targetAngle += random(-PI / 2, PI / 2);
       }
     } else if (this.currentState === "avoid") {
-      // Face away from player
       let vecToPlayer = p5.Vector.sub(player.pos, this.pos);
-      this.targetAngle = vecToPlayer.heading() + PI; // Opposite direction
-    } else if (this.currentState === "seek" || this.currentState === "chase") {
-      // Face point
+      this.targetAngle = vecToPlayer.heading() + PI;
+    } else if (this.currentState === "hunt") {
+      // Direct chase
+      let vecToPlayer = p5.Vector.sub(player.pos, this.pos);
+      this.targetAngle = vecToPlayer.heading();
+    } else if (this.currentState === "seek" || this.currentState === "heal_seek" || this.currentState === "chase") {
       if (this.targetPoint) {
         let vecToPoint = p5.Vector.sub(this.targetPoint.pos, this.pos);
         this.targetAngle = vecToPoint.heading();
@@ -121,7 +148,6 @@ class AIVehicle extends Vehicle {
     }
 
     // 3. SET PHYSICS TARGETS
-    // Use maxSpeed (which effectively scales with Mass from Vehicle.updateSize)
     this.targetSpeed = this.maxSpeed * speedMult;
   }
 
@@ -134,7 +160,8 @@ class AIVehicle extends Vehicle {
     while (diff <= -PI) diff += TWO_PI;
     while (diff > PI) diff -= TWO_PI;
 
-    let turnRate = this.baseTurnSpeed;
+    // Apply Mass Turn Multiplier (Weight Tax)
+    let turnRate = this.baseTurnSpeed * this.massTurnMult;
     if (abs(diff) > turnRate) {
       this.angle += diff > 0 ? turnRate : -turnRate;
     } else {
@@ -146,7 +173,8 @@ class AIVehicle extends Vehicle {
     let limitSpeed = Math.min(this.targetSpeed, this.maxSpeed);
 
     if (this.speed < limitSpeed) {
-      this.speed += this.accelerationRate;
+      // Apply Mass Accel Multiplier (Weight Tax)
+      this.speed += this.accelerationRate * this.massAccelMult;
     } else if (this.speed > limitSpeed) {
       this.speed -= this.decelerationRate;
     }

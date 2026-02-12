@@ -45,7 +45,9 @@ class Star {
     pop();
   }
   
-  checkCapture(pos) {
-    return p5.Vector.dist(this.pos, pos) < this.captureRadius;
+  checkCapture(pos, vehicleRadius = 20) {
+    // Scale capture radius based on vehicle size (larger vehicles have easier time collecting)
+    let scaledCaptureRadius = this.captureRadius + (vehicleRadius - 20) * 0.8;
+    return p5.Vector.dist(this.pos, pos) < scaledCaptureRadius;
   }
 }

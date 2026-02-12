@@ -22,8 +22,8 @@ class Obstacle {
     this.rotSpeed = random(-0.05, 0.05);
 
     // Chase Behavior
-    this.detectionRadius = 300;
-    this.chaseSpeed = 4; // Faster than normal float
+    this.detectionRadius = 200; // Reduced from 250
+    this.chaseSpeed = 2.5; // Reduced from 3 - much easier to outrun
     this.chaseTimer = 0;
     this.isChasing = false;
     this.wanderVel = this.vel.copy(); // Store original wander
@@ -40,7 +40,7 @@ class Obstacle {
       // Start Chase
       if (!this.isChasing && dist < this.detectionRadius) {
         this.isChasing = true;
-        this.chaseTimer = 180; // Chase for 3 seconds
+        this.chaseTimer = 120; // Chase for 2 seconds (reduced from 3)
 
         // Alert Sound
         if (typeof soundManager !== "undefined") soundManager.playAlert();
@@ -127,37 +127,28 @@ class Obstacle {
         this.isChasing = false;
         this.chaseTimer = -60; // Stunned for 1 second
 
-        // 4. SOUND (with cooldown)
-        if (
-          this.collisionCooldown <= 0 &&
-          vehicle.constructor.name === "PlayerVehicle" &&
-          typeof soundManager !== "undefined"
-        ) {
-          soundManager.playBonusShield();
-          this.collisionCooldown = 15; // 250ms cooldown (15 frames at 60fps)
-        }
+        // 4. SOUND REMOVED (User Request)
+        this.collisionCooldown = 15; 
         return;
       }
 
-      // Bounce vehicle
+      // Bounce vehicle - MUCH stronger separation
       let push = p5.Vector.sub(vehicle.pos, this.pos).normalize();
-      vehicle.pos.add(push.mult(5));
+      vehicle.pos.add(push.mult(15)); // Increased from 5 to 15
 
       // Speed penalty
       vehicle.speed *= -0.5; // Bounce back
 
-      // Damage
-      vehicle.takeDamage(20); // 20 damage per hit
+      // Scaled Damage - Big vehicles take less damage
+      // Base: 10 damage (reduced from 20), scales down with mass
+      // mass 100 = 10 damage, mass 200 = 7 damage, mass 400 = 5 damage
+      let baseDamage = 10;
+      let massScale = 100 / Math.max(vehicle.mass || 100, 100); // Scale inversely with mass
+      let damage = Math.max(baseDamage * massScale, 5); // Min 5 damage
+      vehicle.takeDamage(damage);
 
-      // Sound (with cooldown to prevent spam)
-      if (
-        this.collisionCooldown <= 0 &&
-        typeof soundManager !== "undefined" &&
-        vehicle.constructor.name === "PlayerVehicle"
-      ) {
-        soundManager.playHit();
-        this.collisionCooldown = 15; // 250ms cooldown (15 frames at 60fps)
-      }
+      // Sound Removed (User Request)
+      this.collisionCooldown = 15;
 
       // MASS REDUCTION
       // Shrink logic

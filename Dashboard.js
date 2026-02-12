@@ -32,48 +32,57 @@ class Dashboard {
    */
   show() {
     if (!this.visible) return;
+    
+    // Disable on mobile as requested (using buttons instead)
+    if (typeof mobileManager !== 'undefined' && mobileManager.isMobile) return;
 
     push();
     resetMatrix();
 
-    // Calculate dimensions
-    let lines = [
+    // Calculate dimensions - Scaled
+    let isMobile = (typeof mobileManager !== 'undefined' && mobileManager.isMobile);
+    
+    let lines = isMobile ? [
+      "JOYSTICK - Diriger",
+      "DASH - S'élancer",
+      "BOUTON II - Menu",
+      "TAP - Interagir"
+    ] : [
       "SPACE - Dash",
       "H - Hide Dashboard",
       "ESC - Display Menu",
       "D - Toggle Debug",
     ];
-    let width = 200;
-    let height = this.padding * 2 + lines.length * this.lineHeight;
+    let panelW = 160 * UI_SCALE;
+    let panelH = (this.padding * 2 + lines.length * this.lineHeight) * UI_SCALE;
 
     // Position at center-left of screen
-    let yPos = height / 2 - height / 2;
-    yPos = 100;
+    let yPos = 100 * UI_SCALE;
 
     // Panel background with border
     fill(15, 20, 45, 230);
     stroke(80, 150, 220);
     strokeWeight(2);
-    rect(this.x, yPos, width, height, 5);
+    rect(this.x, yPos, panelW, panelH, 5 * UI_SCALE);
 
     // Title
     fill(100, 200, 255);
     noStroke();
-    textSize(14);
+    textSize(12 * UI_SCALE);
     textAlign(LEFT, TOP);
     textStyle(BOLD);
-    text("CONTROLS", this.x + this.padding, yPos + this.padding - 3);
+    text("CONTROLS", this.x + this.padding * UI_SCALE, yPos + this.padding * UI_SCALE - 3);
 
     // Control keys
     fill(200, 220, 240);
-    textSize(12);
+    textSize(10 * UI_SCALE);
     textStyle(NORMAL);
     textAlign(LEFT, TOP);
 
-    let yOffset = yPos + this.padding + 22;
+    let yOffset = yPos + (this.padding + 18) * UI_SCALE;
     for (let line of lines) {
-      text(line, this.x + this.padding, yOffset);
-      yOffset += this.lineHeight;
+      text(line, this.x + this.padding * UI_SCALE, yOffset);
+      yOffset += this.lineHeight * UI_SCALE;
     }
 
     pop();

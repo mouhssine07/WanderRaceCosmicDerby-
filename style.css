@@ -14,12 +14,11 @@ body {
   min-height: 100vh;
   overflow: hidden;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  touch-action: none;
 }
 
 canvas {
   display: block;
-  border-radius: 8px;
-  box-shadow: 0 0 40px rgba(100, 200, 255, 0.3);
 }
 /* Menu input styling */
 input[type="text"] {

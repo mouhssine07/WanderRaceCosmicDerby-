@@ -5,20 +5,34 @@
 class SoundManager {
   constructor() {
     this.ready = false;
+    // Rate limiting for collision sounds (prevent audio spam)
+    this.lastCollisionTime = 0;
+    this.collisionCooldown = 100; // ms between collision sounds
   }
 
   /**
    * Checks if AudioContext is ready.
-   * Returns true if running, false if suspended (and tries to resume).
+   * Returns true if running.
    */
   ensureAudioContext() {
+    if (typeof getAudioContext !== 'function') return false;
+    return getAudioContext().state === 'running';
+  }
+
+  /**
+   * Explicitly resume AudioContext - should be called from a user gesture
+   */
+  async resume() {
+    if (typeof getAudioContext !== 'function') return;
     let ctx = getAudioContext();
     if (ctx.state !== 'running') {
-      // Try to resume, but don't force sound yet
-      ctx.resume().catch(e => {}); 
-      return false;
+      try {
+        await ctx.resume();
+        console.log("AudioContext Resumed Successfully");
+      } catch (e) {
+        console.warn("AudioContext Resume Failed:", e);
+      }
     }
-    return true;
   }
 
   /**
@@ -117,10 +131,17 @@ class SoundManager {
   }
 
   /**
-   * Play Crash / Vehicle Collision
+   * Play Crash / Vehicle Collision (Rate limited to prevent audio spam)
    */
   playCrash() {
     if (!this.ensureAudioContext()) return;
+    
+    // Rate limit collision sounds
+    let now = millis();
+    if (now - this.lastCollisionTime < this.collisionCooldown) {
+      return; // Skip this sound
+    }
+    this.lastCollisionTime = now;
 
     let noise = new p5.Noise('brown'); // Low rumble
     let env = new p5.Envelope();
@@ -231,5 +252,4 @@ class SoundManager {
   }
 }
 
-// Global instance
-const soundManager = new SoundManager();
+// Global instance initialization moved to sketch.js setup()

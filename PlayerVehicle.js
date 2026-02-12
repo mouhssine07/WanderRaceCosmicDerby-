@@ -29,6 +29,7 @@ class PlayerVehicle extends Vehicle {
     this.dashCooldown = 0;
     this.dashTimer = 0;
     this.isDashing = false;
+    this.dashUsedCount = 0; // Initialize dash usage counter
 
     // Input State
     this.targetAngle = -PI / 2;
@@ -40,9 +41,16 @@ class PlayerVehicle extends Vehicle {
    */
   updatePhysics(tractionMult = 1.0) {
     // 1. INPUT HANDLING & ANGLE CALCULATION
-    // Calculate vector to mouse (relative to screen center)
     let dx = mouseX - width / 2;
     let dy = mouseY - height / 2;
+    
+    // Joystick Override for Mobile (Persistent Steering)
+    if (typeof mobileManager !== 'undefined' && mobileManager.isMobile) {
+        let v = mobileManager.getJoystickVector();
+        dx = v.x;
+        dy = v.y;
+    }
+    
     this.targetAngle = atan2(dy, dx);
 
     // 2. STEERING (Angular Interpolation)
@@ -52,8 +60,13 @@ class PlayerVehicle extends Vehicle {
     if (diff < -PI) diff += TWO_PI;
 
     // Smooth steering (Arcade feel: snap quickly but smoothly)
-    // Dynamic turn speed: faster when slow, slightly slower when very fast (optional, but good for stability)
-    let steerAmount = this.turnSpeed * tractionMult;
+    // Apply Mass Turn Multiplier (Weight Tax)
+    let steerAmount = this.turnSpeed * tractionMult * this.massTurnMult;
+    
+    // Mobile Equity: +7% Rotation Speed for Mobile Players
+    if (typeof mobileManager !== 'undefined' && mobileManager.isMobile) {
+        steerAmount *= 1.07;
+    }
 
     // Apply steering limit
     if (abs(diff) > steerAmount) {
@@ -63,12 +76,16 @@ class PlayerVehicle extends Vehicle {
     }
 
     // 3. ACCELERATION & FRICTION
-    // Distance based speed control
-    let distToMouse = dist(mouseX, mouseY, width / 2, height / 2);
+    // Distance based speed control (or joystick magnitude)
+    let inputMag = dist(mouseX, mouseY, width / 2, height / 2);
+    if (typeof mobileManager !== 'undefined' && mobileManager.isMobile) {
+        inputMag = mobileManager.getJoystickVector().mag() * 100; // Map 0-1 to 0-100 scale
+    }
+    
     let targetSpeed = 0;
 
     // Deadzone near car to stop
-    if (distToMouse > 30) {
+    if (inputMag > 30) {
       targetSpeed = this.maxSpeed;
     }
 
@@ -87,20 +104,17 @@ class PlayerVehicle extends Vehicle {
     }
 
     // Apply Acceleration
-    if (distToMouse > 30 || this.isDashing) {
+    if (inputMag > 30 || this.isDashing) {
       if (this.speed < targetSpeed) {
-        // Apply Accel Multiplier
-        let accel = this.accelerationRate * this.accelMult;
-        // Heavier vehicles accelerate slower too?
-        // let massFactor = 100 / (50 + this.mass);
-        // accel *= massFactor; // Optional feel
+        // Apply Accel Multipliers (Powerup * Weight Tax)
+        let accel = this.accelerationRate * this.accelMult * this.massAccelMult;
         this.speed += accel * tractionMult;
       }
     }
 
     // Apply Friction / Deceleration
     if (!this.isDashing) {
-      if (distToMouse <= 30) {
+      if (inputMag <= 30) {
         // Stopping
         this.speed *= this.friction;
       } else if (this.speed > targetSpeed) {
@@ -159,20 +173,23 @@ class PlayerVehicle extends Vehicle {
   dash() {
     if (this.dashCooldown <= 0) {
       this.isDashing = true;
-      this.dashTimer = 25;
-      this.dashCooldown = 180; // 3 seconds
+      this.dashTimer = 30; // 0.5s of dash
+      this.dashCooldown = 300; // 5 seconds @ 60fps
 
-      // IMPULSE: Immediate speed boost
-      // If moving slow, boost to max * 1.5 instantly
-      // If moving fast, boost to speed * 1.5
-      let boostSpeed = max(this.maxSpeed, this.speed) * 2.0; // Significant boost
+      // INVISIBLE/INVINCIBLE during the dash
+      this.shieldTimer = Math.max(this.shieldTimer, 30); 
+
+      // IMPULSE: Immediate speed boost x3
+      let boostSpeed = max(this.maxSpeed, this.speed) * 3.0;
       this.speed = boostSpeed;
 
+      this.addPopup("🚀 DASH !!", color(0, 255, 255));
       soundManager.playDash();
     }
   }
 
   show() {
+    this.drawModeAura();
     push();
     translate(this.pos.x, this.pos.y);
     rotate(this.angle); // Rotate visual to match Steering Angle (not drift angle, looks better)
@@ -239,7 +256,7 @@ class PlayerVehicle extends Vehicle {
       rect(0, 0, 30, 4, 2);
       fill(0, 255, 255);
       rectMode(CORNER);
-      let w = map(this.dashCooldown, 180, 0, 0, 30);
+      let w = map(this.dashCooldown, 300, 0, 0, 30);
       rect(-15, -2, w, 4, 2);
       pop();
     }
@@ -247,44 +264,80 @@ class PlayerVehicle extends Vehicle {
 
   drawProceduralSprite() {
     let w = this.r * 0.9;
-    let h = this.r * 2.4; // Sleeker
-    let bodyColor = this.isDashing ? color(0, 255, 255) : color(255, 215, 0);
-    let wingColor = this.isDashing ? color(50, 200, 255) : color(255, 180, 0);
-    let cockpitColor = color(20, 20, 40, 200);
+    let h = this.r * 2.4; 
+    let currentSkin = (profile && profile.data) ? profile.data.currentSkin : 'default';
 
-    stroke(255, 200);
-    strokeWeight(1);
+    push();
 
-    // Rear Wings
-    fill(wingColor);
-    triangle(0, h / 3, -w * 1.2, h / 2, -w * 0.5, 0);
-    triangle(0, h / 3, w * 1.2, h / 2, w * 0.5, 0);
+    // 1. CHOOSE COLORS BASED ON SKIN
+    let bodyColor = color(70, 70, 80);
+    let detailColor = color(0, 200, 255);
+    let glowColor = color(0, 255, 255, 100);
 
-    // Main Body
+    if (currentSkin === 'neon') {
+        bodyColor = color(20, 20, 30);
+        detailColor = color(255, 0, 255);
+        glowColor = color(0, 255, 255, 150);
+    } else if (currentSkin === 'phoenix') {
+        bodyColor = color(100, 20, 0);
+        detailColor = color(255, 200, 0);
+        glowColor = color(255, 50, 0, 150);
+    } else if (currentSkin === 'galaxy') {
+        bodyColor = color(10, 10, 50);
+        detailColor = color(150, 0, 255);
+        glowColor = color(100, 0, 255, 100);
+    } else if (currentSkin === 'deathstar') {
+        bodyColor = color(100);
+        detailColor = color(50);
+        glowColor = color(255, 0, 0, 100);
+    }
+
+    // 2. RENDERING
+    // Glow
+    noStroke();
+    fill(glowColor);
+    ellipse(0, 0, h, h);
+
+    // Body Setup
     fill(bodyColor);
-    beginShape();
-    vertex(0, -h / 2); // Nose
-    bezierVertex(w / 2, -h / 4, w * 0.8, h / 4, w / 2, h / 2);
-    vertex(0, h / 2 + 5); // Engine exhaust
-    vertex(-w / 2, h / 2);
-    bezierVertex(-w * 0.8, h / 4, -w / 2, -h / 4, 0, -h / 2);
-    endShape(CLOSE);
+    stroke(detailColor);
+    strokeWeight(1.5);
+    
+    if (currentSkin === 'deathstar') {
+        // Circular ship
+        circle(0, 0, h * 0.7);
+        fill(detailColor);
+        circle(h*0.2, -h*0.1, h*0.15); // "The dish"
+    } else {
+        // Rocket/Ship shape
+        beginShape();
+        vertex(0, -h / 2); // Nose
+        bezierVertex(w, -h / 4, w, h / 4, w / 2, h / 2); // Right wing
+        vertex(-w / 2, h / 2); // Bottom
+        bezierVertex(-w, h / 4, -w, -h / 4, 0, -h / 2); // Left wing
+        endShape(CLOSE);
 
-    // Cockpit
-    fill(cockpitColor);
-    ellipse(0, -h / 8, w * 0.5, h * 0.35);
+        // Cockpit
+        fill(detailColor);
+        ellipse(0, -h / 6, w / 1.5, h / 4);
+    }
 
-    // Engine Glow (Redesigned for performance and readability)
+    // Dash / Specific details
     if (this.isDashing) {
       noStroke();
-      // Core
-      fill(255);
-      ellipse(0, h / 2, w * 0.4, w * 0.3);
-      // Glow rings
-      fill(0, 255, 255, 100);
+      fill(detailColor);
       ellipse(0, h / 2, w * 0.8, w * 0.6);
-      fill(0, 255, 255, 50);
-      ellipse(0, h / 2, w * 1.2, w * 0.9);
     }
+
+    if (currentSkin === 'neon') {
+        strokeWeight(2);
+        line(-w, 0, w, 0); // Neon bar
+    } else if (currentSkin === 'phoenix') {
+        // Flame effect
+        fill(255, 100, 0, 200);
+        triangle(-w/2, h/2, w/2, h/2, 0, h/2 + random(10, 30));
+    }
+
+    pop();
   }
 }

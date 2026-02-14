@@ -83,13 +83,38 @@ function preload() {
 function setup() {
   pixelDensity(1);
   
-  // Force landscape mode and fullscreen
-  let canvas = createCanvas(windowWidth, windowHeight);
-  canvas.parent(document.body);
+  // Get true viewport dimensions (accounting for mobile browser chrome)
+  let canvasWidth = window.innerWidth;
+  let canvasHeight = window.innerHeight;
   
-  // Request fullscreen on mobile
+  // Use visualViewport if available (more accurate on mobile)
+  if (window.visualViewport) {
+    canvasWidth = window.visualViewport.width;
+    canvasHeight = window.visualViewport.height;
+  }
+  
+  // Force landscape mode and fullscreen
+  let canvas = createCanvas(canvasWidth, canvasHeight);
+  canvas.parent(document.body);
+  canvas.style('display', 'block');
+  canvas.style('position', 'fixed');
+  canvas.style('top', '0');
+  canvas.style('left', '0');
+  
+  // Request fullscreen on mobile after user interaction
   if (isMobileDevice()) {
-    requestFullscreen();
+    // Hide address bar on first touch
+    document.addEventListener('touchstart', function hideAddressBar() {
+      requestFullscreen();
+      // Also try to scroll to hide address bar
+      window.scrollTo(0, 1);
+      setTimeout(() => window.scrollTo(0, 0), 100);
+    }, { once: true });
+  }
+  
+  // Listen for viewport changes (address bar show/hide)
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', handleViewportResize);
   }
 
   // Initialize Dashboard
@@ -121,11 +146,27 @@ function setup() {
 }
 
 function windowResized() {
-  resizeCanvas(windowWidth, windowHeight);
+  let newWidth = window.innerWidth;
+  let newHeight = window.innerHeight;
+  
+  // Use visualViewport for more accurate dimensions on mobile
+  if (window.visualViewport) {
+    newWidth = window.visualViewport.width;
+    newHeight = window.visualViewport.height;
+  }
+  
+  resizeCanvas(newWidth, newHeight);
   
   // Re-request fullscreen if needed
   if (isMobileDevice() && !isFullscreen()) {
     requestFullscreen();
+  }
+}
+
+// Handle viewport changes (mobile address bar show/hide)
+function handleViewportResize() {
+  if (window.visualViewport) {
+    resizeCanvas(window.visualViewport.width, window.visualViewport.height);
   }
 }
 
@@ -137,13 +178,24 @@ function isMobileDevice() {
 function requestFullscreen() {
   const elem = document.documentElement;
   if (elem.requestFullscreen) {
-    elem.requestFullscreen();
+    elem.requestFullscreen().catch(() => {});
   } else if (elem.webkitRequestFullscreen) {
-    elem.webkitRequestFullscreen();
+    elem.webkitRequestFullscreen().catch(() => {});
   } else if (elem.mozRequestFullScreen) {
-    elem.mozRequestFullScreen();
+    elem.mozRequestFullScreen().catch(() => {});
   } else if (elem.msRequestFullscreen) {
-    elem.msRequestFullscreen();
+    elem.msRequestFullscreen().catch(() => {});
+  }
+  
+  // iOS Safari specific - try to hide address bar
+  if (isMobileDevice()) {
+    window.scrollTo(0, 1);
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+      if (window.visualViewport) {
+        resizeCanvas(window.visualViewport.width, window.visualViewport.height);
+      }
+    }, 100);
   }
 }
 

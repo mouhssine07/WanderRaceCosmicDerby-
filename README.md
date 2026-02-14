@@ -1,6 +1,7 @@
 # WANDER RACE – COSMIC DERBY
 
-Voici le lien : https://mouhssinejb.itch.io/wanderracecosmicderby
+Voici le lien : https://mouhssinejb.itch.io/wanderracecosmicderby ---
+Voici le lien 2 : https://wanderracecosmicderby.netlify.app/
 
 ## 👨‍💻 DÉVELOPPEURS
 *   **Mouhssine Jaiba**

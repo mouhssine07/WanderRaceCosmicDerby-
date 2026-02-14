@@ -255,6 +255,16 @@ function initGame() {
   player = new PlayerVehicle(startX, startY, rocketImage);
   player.name = playerName; // Set player name for KOTH display
   
+  // Reset player velocity to zero (spawn stationary)
+  player.vel.set(0, 0);
+  player.acc.set(0, 0);
+  player.speed = 0;
+  
+  // Reset camera to player position immediately
+  camX = width / 2 - player.pos.x;
+  camY = height / 2 - player.pos.y;
+  camZoom = 1.0;
+  
   // STATS TRACKING
   gameStats = {
       kills: 0,

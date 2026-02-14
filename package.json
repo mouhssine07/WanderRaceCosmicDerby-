@@ -1,0 +1,32 @@
+{
+  "name": "wander-race-cosmic-derby",
+  "version": "1.0.0",
+  "description": "An endless cosmic racing game with steering behaviors",
+  "main": "sketch.js",
+  "scripts": {
+    "build": "echo 'No build step needed for static site'",
+    "serve": "npx serve .",
+    "capacitor:init": "npx cap init",
+    "capacitor:add:android": "npx cap add android",
+    "capacitor:add:ios": "npx cap add ios",
+    "capacitor:sync": "npx cap sync",
+    "capacitor:open:android": "npx cap open android",
+    "capacitor:open:ios": "npx cap open ios"
+  },
+  "keywords": [
+    "game",
+    "racing",
+    "mobile",
+    "p5js"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@capacitor/cli": "^5.5.0"
+  },
+  "dependencies": {
+    "@capacitor/android": "^5.5.0",
+    "@capacitor/core": "^5.5.0",
+    "@capacitor/ios": "^5.5.0"
+  }
+}

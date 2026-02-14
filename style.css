@@ -4,6 +4,20 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  overflow: hidden;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 body {
@@ -11,14 +25,52 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  overflow: hidden;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   touch-action: none;
+  -webkit-overflow-scrolling: none;
 }
 
 canvas {
   display: block;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* Force landscape orientation message */
+@media screen and (orientation: portrait) and (max-width: 768px) {
+  body::before {
+    content: "📱 Veuillez tourner votre appareil\A↻ Please rotate your device";
+    white-space: pre;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 10, 26, 0.95);
+    color: #64c8ff;
+    padding: 40px;
+    border-radius: 20px;
+    font-size: 24px;
+    text-align: center;
+    z-index: 10000;
+    border: 3px solid #64c8ff;
+    box-shadow: 0 0 30px rgba(100, 200, 255, 0.5);
+    animation: pulse 2s infinite;
+  }
+  
+  canvas {
+    filter: blur(10px);
+    pointer-events: none;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
 }
 /* Menu input styling */
 input[type="text"] {

@@ -1,0 +1,23 @@
+{
+  "appId": "com.wanderrace.cosmicderby",
+  "appName": "Wander Race: Cosmic Derby",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0a0a1a",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0a1a"
+    }
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

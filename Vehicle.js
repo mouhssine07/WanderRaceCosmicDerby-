@@ -88,6 +88,7 @@ class Vehicle {
     // GAME MODES
     this.team = null; // 1 or 2
     this.isInfected = false;
+    this.score = 0; // Individual score for game modes
   }
 
   updateSize() {

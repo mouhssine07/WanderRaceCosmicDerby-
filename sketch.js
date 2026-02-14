@@ -24,7 +24,7 @@ const WEATHER_CYCLE_FRAMES = 1800; // 30 seconds per weather change approx
 // GAME STATE
 // =============================================================================
 
-let gameState = "MENU"; // 'MENU', 'PLAYING', 'GAME_OVER'
+let gameState = "MENU"; // 'MENU', 'PLAYING', 'GAME_OVER', 'VICTORY'
 let playerName = "";
 let showMenu = false; // Menu overlay state (game continues in background)
 let showDashboard = true; // Dashboard toggle (H key)
@@ -82,7 +82,15 @@ function preload() {
 
 function setup() {
   pixelDensity(1);
-  createCanvas(windowWidth, windowHeight); // Full window for open world feel
+  
+  // Force landscape mode and fullscreen
+  let canvas = createCanvas(windowWidth, windowHeight);
+  canvas.parent(document.body);
+  
+  // Request fullscreen on mobile
+  if (isMobileDevice()) {
+    requestFullscreen();
+  }
 
   // Initialize Dashboard
   if (typeof Dashboard !== "undefined") {
@@ -114,6 +122,36 @@ function setup() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
+  
+  // Re-request fullscreen if needed
+  if (isMobileDevice() && !isFullscreen()) {
+    requestFullscreen();
+  }
+}
+
+// Helper functions for mobile
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+function requestFullscreen() {
+  const elem = document.documentElement;
+  if (elem.requestFullscreen) {
+    elem.requestFullscreen();
+  } else if (elem.webkitRequestFullscreen) {
+    elem.webkitRequestFullscreen();
+  } else if (elem.mozRequestFullScreen) {
+    elem.mozRequestFullScreen();
+  } else if (elem.msRequestFullscreen) {
+    elem.msRequestFullscreen();
+  }
+}
+
+function isFullscreen() {
+  return document.fullscreenElement || 
+         document.webkitFullscreenElement || 
+         document.mozFullScreenElement ||
+         document.msFullscreenElement;
 }
 
 function initGame() {
@@ -123,6 +161,7 @@ function initGame() {
   let startX = random(100, WORLD_WIDTH - 100);
   let startY = random(100, WORLD_HEIGHT - 100);
   player = new PlayerVehicle(startX, startY, rocketImage);
+  player.name = playerName; // Set player name for KOTH display
   
   // STATS TRACKING
   gameStats = {
@@ -250,7 +289,7 @@ function draw() {
   }
 
   // Handle game over state - still draw world behind overlay
-  if (gameState === "GAME_OVER") {
+  if (gameState === "GAME_OVER" || gameState === "VICTORY") {
     updateWeather();
   }
 
@@ -263,14 +302,16 @@ function draw() {
   // Assuming handleCamera() is a new function or the existing camera logic will be moved there.
   // For now, I'll keep the existing camera logic and insert the stats update.
   // handleCamera(); // This line was in the diff, but not defined elsewhere.
-  if (player) {
+  if (player && gameState === "PLAYING") {
     // UPDATE STATS
     if (gameStats) {
         gameStats.maxMass = Math.max(gameStats.maxMass, player.mass);
         gameStats.timeAlive = (millis() - gameStats.startTime) / 1000;
         gameStats.score = totalScore;
     }
-
+  }
+  
+  if (player) {
     // Camera
     let targetCamX = width / 2 - player.pos.x;
     let targetCamY = height / 2 - player.pos.y;
@@ -300,17 +341,21 @@ function draw() {
 
   drawWorldGrid();
 
-  // --- ZONES ---
+  // Draw zones (visual only in GAME_OVER/VICTORY)
   for (let z of zones) {
-    z.update();
+    if (gameState === "PLAYING") {
+      z.update();
+    }
     z.show();
-    z.affect(player);
-    for (let ai of aiVehicles) {
-      z.affect(ai);
+    if (gameState === "PLAYING") {
+      z.affect(player);
+      for (let ai of aiVehicles) {
+        z.affect(ai);
+      }
     }
   }
 
-  if (gameState === "PLAYING" || gameState === "GAME_OVER") {
+  if (gameState === "PLAYING") {
     // --- POINTS (Power-ups) ---
     for (let i = points.length - 1; i >= 0; i--) {
       let p = points[i];
@@ -364,7 +409,31 @@ function draw() {
         }
 
         aiVehicles.splice(i, 1);
-        spawnAI(); // Respawn a new one to keep population constant
+        
+        // In Elimination mode, don't respawn
+        if (gameModeManager.currentMode !== GameModeManager.MODES.ELIMINATION) {
+          spawnAI(); // Respawn a new one to keep population constant
+        } else {
+          gameModeManager.eliminateVehicle(ai);
+          
+          // Check if player wins (all AI eliminated)
+          if (aiVehicles.length === 0 && !player.isDead) {
+            gameState = "VICTORY";
+            
+            // Finalize stats for victory
+            if (gameStats) {
+              gameStats.maxMass = Math.max(gameStats.maxMass, player.mass);
+              gameStats.timeAlive = (millis() - gameStats.startTime) / 1000;
+              gameStats.score = totalScore;
+            }
+            
+            // Save to leaderboard
+            if (profile && !scoreRecorded) {
+              profile.addLeaderboardEntry(playerName, totalScore, gameModeManager.currentMode);
+              scoreRecorded = true;
+            }
+          }
+        }
         continue;
       }
 
@@ -397,15 +466,10 @@ function draw() {
     if (!player.isDead) {
       player.updatePhysics(tractionMultiplier); // New physics update
       
+      // Constrain handled by GameModeManager in Elimination mode
       let bounds = gameModeManager.getCurrentBounds();
       player.pos.x = constrain(player.pos.x, bounds.x + player.r, bounds.x + bounds.w - player.r);
       player.pos.y = constrain(player.pos.y, bounds.y + player.r, bounds.y + bounds.h - player.r);
-      
-      // Damage if outside bounds (for elimination)
-      let d = dist(player.pos.x, player.pos.y, WORLD_WIDTH/2, WORLD_HEIGHT/2);
-      if (d > (bounds.w/2) * 1.1) {
-          player.takeDamage(0.1); // Small tick damage
-      }
       
       player.show();
     } else {
@@ -413,7 +477,21 @@ function draw() {
       if (showMenu) {
         showMenu = false;
       }
+      
+      // In Elimination mode, mark player as eliminated
+      if (gameModeManager.currentMode === GameModeManager.MODES.ELIMINATION) {
+        gameModeManager.eliminateVehicle(player);
+      }
+      
       gameState = "GAME_OVER";
+      
+      // Finalize stats for game over
+      if (gameStats) {
+        gameStats.maxMass = Math.max(gameStats.maxMass, player.mass);
+        gameStats.timeAlive = (millis() - gameStats.startTime) / 1000;
+        gameStats.score = totalScore;
+      }
+      
       // Record to leaderboard
       if (profile && !scoreRecorded) {
           profile.addLeaderboardEntry(playerName, totalScore, gameModeManager.currentMode);
@@ -422,8 +500,10 @@ function draw() {
     }
   }
 
-  // Particles
-  particles.update();
+  // Particles (visual only in GAME_OVER/VICTORY)
+  if (gameState === "PLAYING") {
+    particles.update();
+  }
   particles.show();
 
   // Visualize Border
@@ -440,10 +520,13 @@ function draw() {
   // 5. UI & HUD (drawn on top, not affected by camera)
   drawHUD();
   drawWeatherEffect();
-  socialManager.update();
+  
+  if (gameState === "PLAYING") {
+    socialManager.update();
+    uiManager.update();
+  }
   socialManager.show();
   
-  uiManager.update();
   uiManager.render({
     player: player,
     stars: stars,
@@ -451,16 +534,20 @@ function draw() {
     gameModeManager: gameModeManager
   });
   
-  if (typeof tutorialManager !== 'undefined' && (!mobileManager || !mobileManager.isMobile)) {
+  if (gameState === "PLAYING" && typeof tutorialManager !== 'undefined' && (!mobileManager || !mobileManager.isMobile)) {
     tutorialManager.update({
       player: player,
       collectedStars: collectedStars
     });
+  }
+  if (typeof tutorialManager !== 'undefined' && (!mobileManager || !mobileManager.isMobile)) {
     tutorialManager.show();
   }
 
   if (typeof mobileManager !== 'undefined') {
-    mobileManager.update();
+    if (gameState === "PLAYING") {
+      mobileManager.update();
+    }
     mobileManager.render();
   }
 
@@ -477,7 +564,44 @@ function draw() {
 
   // Mode-specific HUD info
   if (gameState === "PLAYING") {
-      gameModeManager.update(player, aiVehicles);
+      let result = gameModeManager.update(player, aiVehicles);
+      
+      // Check for KOTH victory
+      if (gameModeManager.currentMode === GameModeManager.MODES.KING_OF_THE_HILL && result) {
+        gameState = "VICTORY";
+        
+        // Finalize stats for victory
+        if (gameStats) {
+          gameStats.maxMass = Math.max(gameStats.maxMass, player.mass);
+          gameStats.timeAlive = (millis() - gameStats.startTime) / 1000;
+          gameStats.score = totalScore;
+        }
+        
+        // Save to leaderboard
+        if (profile && !scoreRecorded) {
+          profile.addLeaderboardEntry(playerName, player.score || totalScore, gameModeManager.currentMode);
+          scoreRecorded = true;
+        }
+      }
+      
+      // Check for TDM victory
+      if (gameModeManager.currentMode === GameModeManager.MODES.TDM && result) {
+        gameState = "VICTORY";
+        
+        // Finalize stats for victory
+        if (gameStats) {
+          gameStats.maxMass = Math.max(gameStats.maxMass, player.mass);
+          gameStats.timeAlive = (millis() - gameStats.startTime) / 1000;
+          gameStats.score = gameModeManager.teamKills[player.team];
+        }
+        
+        // Save to leaderboard
+        if (profile && !scoreRecorded) {
+          let teamScore = gameModeManager.teamKills[player.team];
+          profile.addLeaderboardEntry(playerName, teamScore, gameModeManager.currentMode);
+          scoreRecorded = true;
+        }
+      }
   } else if (gameState === "SKINS") {
     drawSkinsMenu();
   } else if (gameState === "LEADERBOARD") {
@@ -757,6 +881,12 @@ function checkVehicleCollision(v1, v2) {
       if (v2 === player) gameStats.damageDealt += damage1;
       if (v1.isDead) {
         v2.onKill();
+        
+        // TDM: Award kill to team
+        if (gameModeManager.currentMode === GameModeManager.MODES.TDM && v2.team) {
+          gameModeManager.awardTeamKill(v2.team);
+        }
+        
         if (v2 === player) {
           socialManager.recordKill(); 
           uiManager.addKillNotification("VOUS", "ENNEMI"); 
@@ -778,6 +908,12 @@ function checkVehicleCollision(v1, v2) {
       if (v1 === player) gameStats.damageDealt += damage2;
       if (v2.isDead) {
         v1.onKill();
+        
+        // TDM: Award kill to team
+        if (gameModeManager.currentMode === GameModeManager.MODES.TDM && v1.team) {
+          gameModeManager.awardTeamKill(v1.team);
+        }
+        
         if (v1 === player) {
             socialManager.recordKill(); 
             uiManager.addKillNotification("VOUS", "ENNEMI"); 
@@ -855,6 +991,11 @@ function drawHUD() {
   // Game Over Screen (Draw on top of everything)
   if (gameState === "GAME_OVER") {
     drawGameOverScreen();
+  }
+  
+  // Victory Screen (Draw on top of everything)
+  if (gameState === "VICTORY") {
+    drawVictoryScreen();
   }
 
   // Menu Overlay (Draw on top of everything - game continues)
@@ -995,6 +1136,76 @@ function drawLeaderboard() {
     textAlign(LEFT, TOP);
     y += 24 * UI_SCALE;
   }
+  pop();
+}
+
+function drawVictoryScreen() {
+  push();
+  resetMatrix();
+  
+  // Victory overlay
+  fill(0, 0, 0, 180);
+  rect(0, 0, width, height);
+  
+  // Victory title with glow
+  textAlign(CENTER, CENTER);
+  fill(255, 215, 0, 50);
+  textSize(80 * UI_SCALE);
+  textStyle(BOLD);
+  text("🏆 VICTOIRE! 🏆", width / 2 + 4, height / 2 - 100 * UI_SCALE + 4);
+  
+  fill(255, 215, 0);
+  text("🏆 VICTOIRE! 🏆", width / 2, height / 2 - 100 * UI_SCALE);
+  
+  // Subtitle - dynamic based on mode
+  fill(200, 255, 200);
+  textSize(24 * UI_SCALE);
+  textStyle(NORMAL);
+  let subtitle = "Vous êtes le dernier survivant!";
+  if (gameModeManager.currentMode === GameModeManager.MODES.KING_OF_THE_HILL) {
+    subtitle = "Vous avez conquis la colline!";
+  } else if (gameModeManager.currentMode === GameModeManager.MODES.TDM) {
+    let playerTeam = player.team === 1 ? "CYAN" : "ORANGE";
+    subtitle = `Team ${playerTeam} a gagné!`;
+  }
+  text(subtitle, width / 2, height / 2 - 40 * UI_SCALE);
+  
+  // Score
+  fill(255);
+  textSize(32 * UI_SCALE);
+  let displayScore = totalScore;
+  if (gameModeManager.currentMode === GameModeManager.MODES.KING_OF_THE_HILL) {
+    displayScore = Math.floor(player.score || 0);
+  } else if (gameModeManager.currentMode === GameModeManager.MODES.TDM) {
+    displayScore = gameModeManager.teamKills[player.team];
+  }
+  text(`Score: ${displayScore}`, width / 2, height / 2 + 20 * UI_SCALE);
+  
+  pop();
+  
+  // Draw Replay/Menu buttons
+  let buttonW = 160 * UI_SCALE;
+  let buttonH = 50 * UI_SCALE;
+  let buttonGap = 20 * UI_SCALE;
+  
+  if (isPortrait) {
+      let buttonY = height - 180 * UI_SCALE;
+      drawGameOverButton(width / 2 - buttonW / 2, buttonY, buttonW, buttonH, "REPLAY", "R");
+      drawGameOverButton(width / 2 - buttonW / 2, buttonY + buttonH + buttonGap, buttonW, buttonH, "MENU", "M");
+  } else {
+      let totalButtonWidth = buttonW * 2 + buttonGap;
+      let startX = width / 2 - totalButtonWidth / 2;
+      let buttonY = height - 150 * UI_SCALE;
+      drawGameOverButton(startX, buttonY, buttonW, buttonH, "REPLAY", "R");
+      drawGameOverButton(startX + buttonW + buttonGap, buttonY, buttonW, buttonH, "MENU", "M");
+  }
+
+  push();
+  fill(150, 150, 200);
+  textSize(14 * UI_SCALE);
+  textAlign(CENTER);
+  textStyle(NORMAL);
+  text("Press R to replay or M to return to menu", width / 2, height - 40 * UI_SCALE);
   pop();
 }
 
@@ -1479,8 +1690,8 @@ function mousePressed() {
     }
   }
 
-  // Mode: GAME_OVER
-  if (gameState === "GAME_OVER") {
+  // Mode: GAME_OVER or VICTORY
+  if (gameState === "GAME_OVER" || gameState === "VICTORY") {
     let bw = 160 * UI_SCALE;
     let bh = 50 * UI_SCALE;
     let bg = 20 * UI_SCALE;
@@ -1599,8 +1810,8 @@ function keyPressed() {
     return false;
   }
 
-  // Game Over handling
-  if (gameState === "GAME_OVER") {
+  // Game Over or Victory handling
+  if (gameState === "GAME_OVER" || gameState === "VICTORY") {
     if (key === "r" || key === "R") {
       gameState = "PLAYING";
       initGame();

@@ -41,6 +41,33 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
   </head>
   <body>
+    <!-- Hidden HTML input for mobile keyboard support -->
+    <input 
+      type="text" 
+      id="mobileNameInput" 
+      maxlength="20" 
+      placeholder="Enter your name"
+      autocomplete="off"
+      autocapitalize="words"
+      style="
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 300px;
+        padding: 14px 20px;
+        font-size: 20px;
+        text-align: center;
+        background: #0f1423;
+        border: 2px solid #64c8ff;
+        border-radius: 8px;
+        color: #e0e0ff;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        z-index: 1000;
+        display: none;
+      "
+    />
+    
     <!-- Scripts in dependency order -->
     <script src="Vehicle.js"></script>
     <script src="PlayerProfile.js"></script>

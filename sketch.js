@@ -143,6 +143,46 @@ function setup() {
 
   // Start with menu
   gameState = "MENU";
+  
+  // Setup mobile name input
+  setupMobileNameInput();
+}
+
+function setupMobileNameInput() {
+  const mobileInput = document.getElementById('mobileNameInput');
+  if (!mobileInput) return;
+  
+  // Only use HTML input on mobile
+  if (!isMobileDevice()) {
+    mobileInput.style.display = 'none';
+    return;
+  }
+  
+  // Sync HTML input with playerName variable
+  mobileInput.addEventListener('input', function() {
+    playerName = this.value;
+  });
+  
+  // Handle Enter key
+  mobileInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && playerName.trim().length > 0) {
+      this.blur(); // Hide keyboard
+      startGame();
+    }
+  });
+  
+  // Show/hide based on game state
+  function updateInputVisibility() {
+    if (gameState === 'MENU' && isMobileDevice()) {
+      mobileInput.style.display = 'block';
+      mobileInput.value = playerName;
+    } else {
+      mobileInput.style.display = 'none';
+    }
+  }
+  
+  // Update on game state changes
+  setInterval(updateInputVisibility, 100);
 }
 
 function windowResized() {
@@ -1498,22 +1538,30 @@ function drawMenu() {
   let instrY = height / 2 - (isPortrait ? 100 : 40) * UI_SCALE;
   text("Enter your name and click PLAY", width / 2, instrY);
 
-  // Input field background
-  fill(30, 30, 50);
-  stroke(100, 200, 255);
-  strokeWeight(2);
-  let inputY = height / 2 - (isPortrait ? 50 : -10) * UI_SCALE;
-  rect(width / 2 - 150 * UI_SCALE, inputY, 300 * UI_SCALE, 50 * UI_SCALE, 5);
+  // Input field background (only show on desktop or if no HTML input)
+  if (!isMobileDevice() || !document.getElementById('mobileNameInput')) {
+    fill(30, 30, 50);
+    stroke(100, 200, 255);
+    strokeWeight(2);
+    let inputY = height / 2 - (isPortrait ? 50 : -10) * UI_SCALE;
+    rect(width / 2 - 150 * UI_SCALE, inputY, 300 * UI_SCALE, 50 * UI_SCALE, 5);
 
-  // Player name input display - centered
-  fill(200, 200, 200);
-  textSize(22 * UI_SCALE);
-  textAlign(CENTER, CENTER);
-  text(
-    playerName + (frameCount % 20 < 10 ? "|" : ""),
-    width / 2,
-    inputY + 27 * UI_SCALE,
-  );
+    // Player name input display - centered
+    fill(200, 200, 200);
+    textSize(22 * UI_SCALE);
+    textAlign(CENTER, CENTER);
+    text(
+      playerName + (frameCount % 20 < 10 ? "|" : ""),
+      width / 2,
+      inputY + 27 * UI_SCALE,
+    );
+  } else {
+    // On mobile, show instruction to tap the input field
+    fill(200, 200, 200);
+    textSize(18 * UI_SCALE);
+    textAlign(CENTER, CENTER);
+    text("👆 Tap the input field above to enter your name", width / 2, height / 2 + 10 * UI_SCALE);
+  }
 
   // Play button
   drawPlayButton();
@@ -1620,6 +1668,14 @@ function drawIndividualModeButton(x, y, w, h, mode) {
 function startGame() {
   // Trim whitespace and set player name, default to "Player" if empty
   playerName = playerName.trim() || "Player";
+  
+  // Hide mobile input if it exists
+  const mobileInput = document.getElementById('mobileNameInput');
+  if (mobileInput) {
+    mobileInput.style.display = 'none';
+    mobileInput.blur(); // Hide keyboard
+  }
+  
   gameState = "PLAYING";
   initGame();
   scoreRecorded = false; // Reset flag for new game
@@ -1631,6 +1687,13 @@ function returnToMenu() {
   gameState = "MENU";
   totalScore = 0;
   scoreRecorded = false; // Reset flag
+  
+  // Show mobile input if on mobile
+  const mobileInput = document.getElementById('mobileNameInput');
+  if (mobileInput && isMobileDevice()) {
+    mobileInput.style.display = 'block';
+    mobileInput.value = '';
+  }
 }
 
 function mousePressed() {

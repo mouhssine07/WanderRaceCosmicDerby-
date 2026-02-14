@@ -266,11 +266,9 @@ function initGame() {
   };
   collectedStars = 0; // Reset tutorial count
 
-  // Initialize Team/Infection for Player
+  // Initialize Team for Player in TDM mode
   if (gameModeManager.currentMode === GameModeManager.MODES.TDM) {
       player.team = 1;
-  } else if (gameModeManager.currentMode === GameModeManager.MODES.INFECTION) {
-      player.isInfected = true; // Player starts infected
   }
 
   // Spawn AI
@@ -371,12 +369,6 @@ function draw() {
   // Handle Skins state
   if (gameState === "SKINS") {
     drawSkinsMenu();
-    return;
-  }
-
-  // Handle Leaderboard state
-  if (gameState === "LEADERBOARD") {
-    drawLeaderboardsMenu();
     return;
   }
 
@@ -696,8 +688,6 @@ function draw() {
       }
   } else if (gameState === "SKINS") {
     drawSkinsMenu();
-  } else if (gameState === "LEADERBOARD") {
-    drawLeaderboardsMenu();
   }
 }
 
@@ -946,19 +936,6 @@ function checkVehicleCollision(v1, v2) {
     if (gameModeManager.currentMode === GameModeManager.MODES.TDM) {
         if (v1.team === v2.team && v1.team !== null) {
             baseDamage = 0;
-        }
-    }
-    
-    // INFECTION: Spread on touch
-    if (gameModeManager.currentMode === GameModeManager.MODES.INFECTION) {
-        if (v1.isInfected && !v2.isInfected) {
-            v2.isInfected = true;
-            v2.addPopup("☣ INFECTED", color(150, 0, 255));
-            if (v1 === player) profile.addXP(100);
-        } else if (v2.isInfected && !v1.isInfected) {
-            v1.isInfected = true;
-            v1.addPopup("☣ INFECTED", color(150, 0, 255));
-            if (v2 === player) profile.addXP(100);
         }
     }
 
@@ -1570,13 +1547,7 @@ function drawMenu() {
   // Play button
   drawPlayButton();
 
-  // Shop/Skins Button
-  drawSkinsButton();
-
-  // Leaderboards Button
-  drawLeaderboardsButton();
-
-  // Mode Selection
+  // Mode Selection (includes Skins as 5th option)
   drawModeButtons();
 
   // Developer credits
@@ -1638,26 +1609,34 @@ function drawModeButtons() {
     fill(255, 200);
     
     if (isPortrait) {
-        // Pushed further down to separate from Skins/Leaderboards buttons (which are at +100)
         let startY = height / 2 + 180 * UI_SCALE; 
         text("MODE:", width / 2, startY - 25 * UI_SCALE);
+        // Draw 4 mode buttons
         for (let i = 0; i < modes.length; i++) {
-            let y = startY + i * (buttonH + 15 * UI_SCALE); // More spacing on mobile
-            drawIndividualModeButton(width / 2, y, buttonW, buttonH, modes[i]);
+            let y = startY + i * (buttonH + 15 * UI_SCALE);
+            drawIndividualModeButton(width / 2, y, buttonW, buttonH, modes[i], false);
         }
+        // Draw Skins button as 5th option
+        let skinsY = startY + modes.length * (buttonH + 15 * UI_SCALE);
+        drawIndividualModeButton(width / 2, skinsY, buttonW, buttonH, "SKINS", true);
     } else {
         let buttonY = height / 2 + 190 * UI_SCALE;
         let spacing = isMobileDevice() ? 200 * UI_SCALE : 160 * UI_SCALE;
         text("CHOOSE MODE:", width / 2, buttonY - 40 * UI_SCALE);
+        // Draw 4 mode buttons + Skins
+        let totalButtons = modes.length + 1; // +1 for Skins
         for (let i = 0; i < modes.length; i++) {
-            let x = width / 2 + (i - (modes.length-1)/2) * spacing;
-            drawIndividualModeButton(x, buttonY, buttonW, buttonH, modes[i]);
+            let x = width / 2 + (i - (totalButtons-1)/2) * spacing;
+            drawIndividualModeButton(x, buttonY, buttonW, buttonH, modes[i], false);
         }
+        // Draw Skins button as last button
+        let skinsX = width / 2 + (modes.length - (totalButtons-1)/2) * spacing;
+        drawIndividualModeButton(skinsX, buttonY, buttonW, buttonH, "SKINS", true);
     }
 }
 
-function drawIndividualModeButton(x, y, w, h, mode) {
-    let isSelected = gameModeManager.currentMode === mode;
+function drawIndividualModeButton(x, y, w, h, mode, isSkins) {
+    let isSelected = !isSkins && gameModeManager.currentMode === mode;
     
     // Larger hit area for mobile
     let hitPadding = isMobileDevice() ? 15 : 0;
@@ -1666,12 +1645,19 @@ function drawIndividualModeButton(x, y, w, h, mode) {
                      mouseY > y - h/2 - hitPadding && 
                      mouseY < y + h/2 + hitPadding;
 
-    if (isSelected) fill(255, 215, 0);
-    else if (isHovering) fill(150, 255, 200);
-    else fill(50, 100, 150);
+    // Special styling for Skins button
+    if (isSkins) {
+        if (isHovering) fill(255, 100, 255);
+        else fill(180, 50, 180);
+        stroke(255, 150, 255);
+    } else {
+        if (isSelected) fill(255, 215, 0);
+        else if (isHovering) fill(150, 255, 200);
+        else fill(50, 100, 150);
+        stroke(255, 150);
+    }
 
-    stroke(255, 150);
-    strokeWeight(isMobileDevice() ? 2 : 1);
+    strokeWeight(isMobileDevice() ? 3 : 2);
     rect(x - w/2, y - h/2, w, h, 8);
     
     fill(isSelected ? 0 : 255);
@@ -1723,8 +1709,8 @@ function mousePressed() {
   // Mode: MENU
   if (gameState === "MENU") {
     // Play button
-    let playW = 150 * UI_SCALE;
-    let playH = 50 * UI_SCALE;
+    let playW = isMobileDevice() ? 200 * UI_SCALE : 150 * UI_SCALE;
+    let playH = isMobileDevice() ? 70 * UI_SCALE : 50 * UI_SCALE;
     let playX = width / 2;
     let playY = height / 2 + (isPortrait ? 30 : 120) * UI_SCALE;
     
@@ -1733,62 +1719,47 @@ function mousePressed() {
       return;
     }
 
-    // Skins button
-    let skinsW = 140 * UI_SCALE;
-    let skinsH = 45 * UI_SCALE;
-    let skinsX = width / 2 - (isPortrait ? 80 : 160) * UI_SCALE;
-    let skinsY = height / 2 + (isPortrait ? 100 : 120) * UI_SCALE;
-    
-    if (mouseOverButton(skinsX, skinsY, skinsW, skinsH)) {
-        gameState = "SKINS";
-        return;
-    }
-
-    // Mode button clicks
+    // Mode button clicks (4 modes + Skins)
     let modes = Object.values(GameModeManager.MODES);
-    let modeW = 140 * UI_SCALE;
-    let modeH = 35 * UI_SCALE;
+    let modeW = isMobileDevice() ? 180 * UI_SCALE : 140 * UI_SCALE;
+    let modeH = isMobileDevice() ? 55 * UI_SCALE : 35 * UI_SCALE;
 
     if (isPortrait) {
         let startY = height / 2 + 180 * UI_SCALE;
+        // Check mode buttons
         for (let i = 0; i < modes.length; i++) {
-            let y = startY + i * (modeH + 8 * UI_SCALE);
+            let y = startY + i * (modeH + 15 * UI_SCALE);
             if (mouseOverButton(width/2, y, modeW, modeH)) {
                 gameModeManager.setMode(modes[i]);
                 if (typeof soundManager !== 'undefined') soundManager.playStarCollect();
                 return;
             }
         }
+        // Check Skins button (5th button)
+        let skinsY = startY + modes.length * (modeH + 15 * UI_SCALE);
+        if (mouseOverButton(width/2, skinsY, modeW, modeH)) {
+            gameState = "SKINS";
+            return;
+        }
     } else {
         let modeY = height / 2 + 190 * UI_SCALE;
-        let spacing = 160 * UI_SCALE;
+        let spacing = isMobileDevice() ? 200 * UI_SCALE : 160 * UI_SCALE;
+        let totalButtons = modes.length + 1;
+        // Check mode buttons
         for (let i = 0; i < modes.length; i++) {
-            let x = width / 2 + (i - (modes.length-1)/2) * spacing;
+            let x = width / 2 + (i - (totalButtons-1)/2) * spacing;
             if (mouseOverButton(x, modeY, modeW, modeH)) {
                 gameModeManager.setMode(modes[i]);
                 if (typeof soundManager !== 'undefined') soundManager.playStarCollect();
                 return;
             }
         }
-    }
-
-    // Leaderboards button
-    let leadX = width / 2 + (isPortrait ? 80 : 160) * UI_SCALE;
-    if (mouseOverButton(leadX, skinsY, skinsW, skinsH)) {
-        gameState = "LEADERBOARD";
-        return;
-    }
-  }
-
-  // Mode: LEADERBOARD
-  if (gameState === "LEADERBOARD") {
-    let bw = 150 * UI_SCALE;
-    let bh = 50 * UI_SCALE;
-    let bx = width/2;
-    let by = height - 100 * UI_SCALE;
-    if (mouseOverButton(bx, by, bw, bh)) {
-        gameState = "MENU";
-        return;
+        // Check Skins button (last button)
+        let skinsX = width / 2 + (modes.length - (totalButtons-1)/2) * spacing;
+        if (mouseOverButton(skinsX, modeY, modeW, modeH)) {
+            gameState = "SKINS";
+            return;
+        }
     }
   }
 
@@ -1978,39 +1949,6 @@ function keyPressed() {
 // HELP MENU & BUTTON
 // =============================================================================
 
-function drawSkinsButton() {
-  // Larger on mobile
-  let buttonW = isMobileDevice() ? 170 * UI_SCALE : 140 * UI_SCALE;
-  let buttonH = isMobileDevice() ? 60 * UI_SCALE : 45 * UI_SCALE;
-  let buttonX = width / 2;
-  let buttonY = height / 2 + (isPortrait ? 100 : 120) * UI_SCALE; // Spaced below Play
-  
-  // Left of Play in landscape, Below in portrait?
-  // Let's keep them side-by-side but smaller for mobile
-  let x = buttonX - (isPortrait ? 80 : 160) * UI_SCALE;
-  
-  // Larger hit area for mobile
-  let hitPadding = isMobileDevice() ? 15 : 0;
-  let isHovering = mouseX > x - buttonW/2 - hitPadding && 
-                   mouseX < x + buttonW/2 + hitPadding && 
-                   mouseY > buttonY - buttonH/2 - hitPadding && 
-                   mouseY < buttonY + buttonH/2 + hitPadding;
-  
-  push();
-  rectMode(CENTER);
-  fill(isHovering ? color(255, 100, 255) : color(180, 50, 180));
-  stroke(255, 150, 255);
-  strokeWeight(isMobileDevice() ? 3 : 2);
-  rect(x, buttonY, buttonW, buttonH, 8);
-  
-  fill(255);
-  noStroke();
-  textSize(isMobileDevice() ? 22 * UI_SCALE : 20 * UI_SCALE);
-  textAlign(CENTER, CENTER);
-  text("SKINS", x, buttonY);
-  pop();
-}
-
 function drawSkinsMenu() {
     push();
     resetMatrix();
@@ -2062,121 +2000,6 @@ function drawSkinsMenu() {
         if (isSelected) {
             fill(255, 215, 0);
             text("EQUIPPED", x, y + 40 * UI_SCALE);
-        }
-    }
-
-    // Back Button
-    let bw = 150 * UI_SCALE;
-    let bh = 50 * UI_SCALE;
-    let bx = width/2;
-    let by = height - 100 * UI_SCALE;
-    let overBack = mouseOverButton(bx, by, bw, bh);
-    
-    fill(overBack ? color(100, 255, 150) : color(100, 200, 255));
-    rectMode(CENTER);
-    rect(bx, by, bw, bh, 5);
-    
-    fill(0);
-    textAlign(CENTER, CENTER);
-    textSize(20 * UI_SCALE);
-    text("BACK", bx, by);
-    pop();
-}
-
-function drawLeaderboardsButton() {
-  // Larger on mobile
-  let buttonW = isMobileDevice() ? 170 * UI_SCALE : 140 * UI_SCALE;
-  let buttonH = isMobileDevice() ? 60 * UI_SCALE : 45 * UI_SCALE;
-  let buttonX = width / 2;
-  let buttonY = height / 2 + (isPortrait ? 100 : 120) * UI_SCALE; // Same Y as Skins
-  
-  // Right of Play in landscape, side-by-side with Skins in portrait
-  let x = buttonX + (isPortrait ? 80 : 160) * UI_SCALE;
-  
-  // Larger hit area for mobile
-  let hitPadding = isMobileDevice() ? 15 : 0;
-  let isHovering = mouseX > x - buttonW/2 - hitPadding && 
-                   mouseX < x + buttonW/2 + hitPadding && 
-                   mouseY > buttonY - buttonH/2 - hitPadding && 
-                   mouseY < buttonY + buttonH/2 + hitPadding;
-  
-  push();
-  rectMode(CENTER);
-  fill(isHovering ? color(255, 215, 0) : color(180, 150, 0));
-  stroke(255, 255, 150);
-  strokeWeight(isMobileDevice() ? 3 : 2);
-  rect(x, buttonY, buttonW, buttonH, 8);
-  
-  fill(0);
-  noStroke();
-  textSize(isMobileDevice() ? 15 * UI_SCALE : 16 * UI_SCALE);
-  textAlign(CENTER, CENTER);
-  textStyle(BOLD);
-  text("LEADERBOARD", x, buttonY);
-  pop();
-}
-
-function drawLeaderboardsMenu() {
-    push();
-    resetMatrix();
-    fill(10, 10, 30, 240);
-    rect(0, 0, width, height);
-
-    fill(255, 215, 0);
-    textSize(36 * UI_SCALE); // Scaled
-    textAlign(CENTER);
-    textStyle(BOLD);
-    text("GLOBAL LEGENDS", width / 2, 80 * UI_SCALE);
-
-    let leaderboard = profile.data.leaderboard || [];
-    let startY = 180 * UI_SCALE;
-    let rowH = 40 * UI_SCALE;
-
-    // Header - Responsive Column Offsets
-    let col1 = width/2 - 250 * UI_SCALE;
-    let col2 = width/2 - 180 * UI_SCALE;
-    let col3 = width/2 + 50 * UI_SCALE;
-    let col4 = width/2 + 150 * UI_SCALE;
-
-    if (isPortrait) {
-        col1 = 20 * UI_SCALE;
-        col2 = 80 * UI_SCALE;
-        col3 = width - 120 * UI_SCALE;
-        col4 = width - 50 * UI_SCALE;
-    }
-
-    fill(200);
-    textSize(14 * UI_SCALE);
-    textAlign(LEFT);
-    text("RANK", col1, startY);
-    text("PLAYER", col2, startY);
-    text("SCORE", col3, startY);
-    text("DATE", col4, startY);
-    
-    stroke(255, 50);
-    line(col1 - 10, startY + 10, col4 + 20, startY + 10);
-
-    for (let i = 0; i < 10; i++) {
-        let y = startY + 40 * UI_SCALE + i * rowH;
-        let entry = leaderboard[i];
-
-        if (i < 3) fill(255, 215, 0); // Gold, Silver, Bronze effect
-        else fill(255);
-
-        textAlign(LEFT);
-        textSize(16 * UI_SCALE);
-        text(`#${i + 1}`, col1, y);
-        
-        if (entry) {
-            text(entry.name.substring(0, isPortrait ? 10 : 20), col2, y);
-            text(entry.score, col3, y);
-            textSize(10 * UI_SCALE);
-            fill(150);
-            text(entry.date, col4, y);
-        } else {
-            fill(100);
-            text("---", col2, y);
-            text("0", col3, y);
         }
     }
 

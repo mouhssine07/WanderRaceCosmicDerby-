@@ -347,11 +347,6 @@ class Vehicle {
       this.speedMult = 1.0;
       this.accelMult = 1.0;
     }
-
-    // INFECTION: +50% speed for infected
-    if (this.isInfected) {
-        this.speedMult *= 1.5;
-    }
   }
 
   /**

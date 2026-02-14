@@ -7,8 +7,7 @@ class GameModeManager {
         CLASSIC: 'Classic',
         ELIMINATION: 'Elimination',
         KING_OF_THE_HILL: 'King of the Hill',
-        TDM: 'Team Deathmatch',
-        INFECTION: 'Infection'
+        TDM: 'Team Deathmatch'
     };
 
     constructor() {
@@ -34,9 +33,6 @@ class GameModeManager {
         this.targetKills = 30; // First team to 30 kills wins
         this.teamAssigned = false; // Flag to assign teams once
         
-        // Infection
-        this.infectedVehicles = new Set();
-        
         // Elimination
         this.eliminatedVehicles = new Set();
     }
@@ -58,7 +54,6 @@ class GameModeManager {
         this.hillMoveTimer = 0;
         this.teamKills = { team1: 0, team2: 0 };
         this.teamAssigned = false;
-        this.infectedVehicles.clear();
         this.eliminatedVehicles.clear();
     }
 
@@ -74,9 +69,6 @@ class GameModeManager {
                 break;
             case GameModeManager.MODES.TDM:
                 this.updateTDM(player, aiVehicles);
-                break;
-            case GameModeManager.MODES.INFECTION:
-                this.updateInfection(player, aiVehicles);
                 break;
         }
     }
@@ -278,34 +270,6 @@ class GameModeManager {
         return v1.team && v2.team && v1.team === v2.team;
     }
 
-    /**
-     * INFECTION: One infected vehicle tries to infect others on collision
-     */
-    updateInfection(player, aiVehicles) {
-        // Initialize: infect one random vehicle at start
-        if (this.modeTimer === 1) {
-            let all = [player, ...aiVehicles];
-            let infected = all[floor(random(all.length))];
-            this.infectedVehicles.add(infected);
-        }
-
-        // Check collisions and spread infection
-        let allVehicles = [player, ...aiVehicles];
-        for (let infected of this.infectedVehicles) {
-            for (let v of allVehicles) {
-                if (!this.infectedVehicles.has(v)) {
-                    let d = p5.Vector.dist(infected.pos, v.pos);
-                    if (d < infected.r + v.r) {
-                        this.infectedVehicles.add(v);
-                        if (v === player) {
-                            player.addPopup("🦠 INFECTED!", color(0, 255, 0));
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     showOverlay() {
         // Mode Title in HUD
         push();
@@ -349,16 +313,6 @@ class GameModeManager {
             noFill();
             circle(this.hillPos.x, this.hillPos.y, this.hillRadius * 2 + sin(frameCount * 0.1) * 10);
             pop();
-        } else if (this.currentMode === GameModeManager.MODES.INFECTION) {
-            // Show infected vehicles with green aura
-            for (let v of this.infectedVehicles) {
-                push();
-                noFill();
-                stroke(0, 255, 0, 150);
-                strokeWeight(3);
-                circle(v.pos.x, v.pos.y, v.r * 3 + sin(frameCount * 0.2) * 5);
-                pop();
-            }
         }
     }
 }

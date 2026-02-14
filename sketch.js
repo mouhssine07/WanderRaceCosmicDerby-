@@ -1275,9 +1275,9 @@ function drawVictoryScreen() {
   
   pop();
   
-  // Draw Replay/Menu buttons
-  let buttonW = 160 * UI_SCALE;
-  let buttonH = 50 * UI_SCALE;
+  // Larger buttons on mobile
+  let buttonW = isMobileDevice() ? 200 * UI_SCALE : 160 * UI_SCALE;
+  let buttonH = isMobileDevice() ? 70 * UI_SCALE : 50 * UI_SCALE;
   let buttonGap = 20 * UI_SCALE;
   
   if (isPortrait) {
@@ -1306,9 +1306,9 @@ function drawGameOverScreen() {
       uiManager.showEndScreenStats(gameStats);
   }
 
-  // Draw Replay/Menu buttons on top of stats screen
-  let buttonW = 160 * UI_SCALE;
-  let buttonH = 50 * UI_SCALE;
+  // Larger buttons on mobile
+  let buttonW = isMobileDevice() ? 200 * UI_SCALE : 160 * UI_SCALE;
+  let buttonH = isMobileDevice() ? 70 * UI_SCALE : 50 * UI_SCALE;
   let buttonGap = 20 * UI_SCALE;
   
   if (isPortrait) {
@@ -1333,8 +1333,12 @@ function drawGameOverScreen() {
 }
 
 function drawGameOverButton(x, y, w, h, label, key) {
-  // Check if mouse is over button
-  let isHovering = mouseX > x && mouseX < x + w && mouseY > y && mouseY < y + h;
+  // Larger hit area on mobile
+  let hitPadding = isMobileDevice() ? 15 : 0;
+  let isHovering = mouseX > x - hitPadding && 
+                   mouseX < x + w + hitPadding && 
+                   mouseY > y - hitPadding && 
+                   mouseY < y + h + hitPadding;
 
   // Button color changes on hover
   if (isHovering) {
@@ -1344,13 +1348,13 @@ function drawGameOverButton(x, y, w, h, label, key) {
   }
 
   stroke(150, 255, 200);
-  strokeWeight(2);
+  strokeWeight(isMobileDevice() ? 3 : 2);
   rectMode(CORNER);
-  rect(x, y, w, h, 5);
+  rect(x, y, w, h, 8);
 
   // Button text
   fill(10, 10, 30);
-  textSize(20 * UI_SCALE);
+  textSize(isMobileDevice() ? 24 * UI_SCALE : 20 * UI_SCALE);
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   text(label, x + w / 2, y + h / 2);
@@ -1598,30 +1602,35 @@ function drawMenu() {
 }
 
 function drawPlayButton() {
-  let buttonW = 150 * UI_SCALE;
-  let buttonH = 50 * UI_SCALE;
+  // Larger buttons on mobile
+  let buttonW = isMobileDevice() ? 200 * UI_SCALE : 150 * UI_SCALE;
+  let buttonH = isMobileDevice() ? 70 * UI_SCALE : 50 * UI_SCALE;
   let buttonX = width / 2;
   let buttonY = height / 2 + (isPortrait ? 30 : 120) * UI_SCALE; // Adjusted for name input
 
-  // Check if mouse is over button
-  let isHovering = mouseX > buttonX - buttonW / 2 && mouseX < buttonX + buttonW / 2 && 
-                   mouseY > buttonY - buttonH / 2 && mouseY < buttonY + buttonH / 2;
+  // Larger hit area for mobile (invisible padding)
+  let hitPadding = isMobileDevice() ? 20 : 0;
+  let isHovering = mouseX > buttonX - buttonW / 2 - hitPadding && 
+                   mouseX < buttonX + buttonW / 2 + hitPadding && 
+                   mouseY > buttonY - buttonH / 2 - hitPadding && 
+                   mouseY < buttonY + buttonH / 2 + hitPadding;
 
   fill(isHovering ? color(100, 255, 150) : color(100, 200, 255));
   stroke(150, 255, 200);
-  strokeWeight(2);
-  rect(buttonX - buttonW / 2, buttonY - buttonH / 2, buttonW, buttonH, 5);
+  strokeWeight(3);
+  rect(buttonX - buttonW / 2, buttonY - buttonH / 2, buttonW, buttonH, 8);
 
   fill(10, 10, 30);
-  textSize(24 * UI_SCALE);
+  textSize(isMobileDevice() ? 28 * UI_SCALE : 24 * UI_SCALE);
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   text("PLAY", buttonX, buttonY);
 }
 
 function drawModeButtons() {
-    let buttonW = 140 * UI_SCALE;
-    let buttonH = 35 * UI_SCALE;
+    // Larger buttons on mobile
+    let buttonW = isMobileDevice() ? 180 * UI_SCALE : 140 * UI_SCALE;
+    let buttonH = isMobileDevice() ? 55 * UI_SCALE : 35 * UI_SCALE;
     let modes = Object.values(GameModeManager.MODES);
     
     textAlign(CENTER, CENTER);
@@ -1633,12 +1642,12 @@ function drawModeButtons() {
         let startY = height / 2 + 180 * UI_SCALE; 
         text("MODE:", width / 2, startY - 25 * UI_SCALE);
         for (let i = 0; i < modes.length; i++) {
-            let y = startY + i * (buttonH + 8 * UI_SCALE);
+            let y = startY + i * (buttonH + 15 * UI_SCALE); // More spacing on mobile
             drawIndividualModeButton(width / 2, y, buttonW, buttonH, modes[i]);
         }
     } else {
         let buttonY = height / 2 + 190 * UI_SCALE;
-        let spacing = 160 * UI_SCALE;
+        let spacing = isMobileDevice() ? 200 * UI_SCALE : 160 * UI_SCALE;
         text("CHOOSE MODE:", width / 2, buttonY - 40 * UI_SCALE);
         for (let i = 0; i < modes.length; i++) {
             let x = width / 2 + (i - (modes.length-1)/2) * spacing;
@@ -1649,19 +1658,25 @@ function drawModeButtons() {
 
 function drawIndividualModeButton(x, y, w, h, mode) {
     let isSelected = gameModeManager.currentMode === mode;
-    let isHovering = mouseX > x - w/2 && mouseX < x + w/2 && mouseY > y - h/2 && mouseY < y + h/2;
+    
+    // Larger hit area for mobile
+    let hitPadding = isMobileDevice() ? 15 : 0;
+    let isHovering = mouseX > x - w/2 - hitPadding && 
+                     mouseX < x + w/2 + hitPadding && 
+                     mouseY > y - h/2 - hitPadding && 
+                     mouseY < y + h/2 + hitPadding;
 
     if (isSelected) fill(255, 215, 0);
     else if (isHovering) fill(150, 255, 200);
     else fill(50, 100, 150);
 
     stroke(255, 150);
-    strokeWeight(1);
-    rect(x - w/2, y - h/2, w, h, 5);
+    strokeWeight(isMobileDevice() ? 2 : 1);
+    rect(x - w/2, y - h/2, w, h, 8);
     
     fill(isSelected ? 0 : 255);
     noStroke();
-    textSize(10 * UI_SCALE);
+    textSize(isMobileDevice() ? 13 * UI_SCALE : 10 * UI_SCALE);
     text(mode.toUpperCase(), x, y);
 }
 
@@ -1964,26 +1979,33 @@ function keyPressed() {
 // =============================================================================
 
 function drawSkinsButton() {
-  let buttonW = 140 * UI_SCALE;
-  let buttonH = 45 * UI_SCALE;
+  // Larger on mobile
+  let buttonW = isMobileDevice() ? 170 * UI_SCALE : 140 * UI_SCALE;
+  let buttonH = isMobileDevice() ? 60 * UI_SCALE : 45 * UI_SCALE;
   let buttonX = width / 2;
   let buttonY = height / 2 + (isPortrait ? 100 : 120) * UI_SCALE; // Spaced below Play
   
   // Left of Play in landscape, Below in portrait?
   // Let's keep them side-by-side but smaller for mobile
   let x = buttonX - (isPortrait ? 80 : 160) * UI_SCALE;
-  let isHovering = mouseOverButton(x, buttonY, buttonW, buttonH);
+  
+  // Larger hit area for mobile
+  let hitPadding = isMobileDevice() ? 15 : 0;
+  let isHovering = mouseX > x - buttonW/2 - hitPadding && 
+                   mouseX < x + buttonW/2 + hitPadding && 
+                   mouseY > buttonY - buttonH/2 - hitPadding && 
+                   mouseY < buttonY + buttonH/2 + hitPadding;
   
   push();
   rectMode(CENTER);
   fill(isHovering ? color(255, 100, 255) : color(180, 50, 180));
   stroke(255, 150, 255);
-  strokeWeight(2);
-  rect(x, buttonY, buttonW, buttonH, 5);
+  strokeWeight(isMobileDevice() ? 3 : 2);
+  rect(x, buttonY, buttonW, buttonH, 8);
   
   fill(255);
   noStroke();
-  textSize(20 * UI_SCALE);
+  textSize(isMobileDevice() ? 22 * UI_SCALE : 20 * UI_SCALE);
   textAlign(CENTER, CENTER);
   text("SKINS", x, buttonY);
   pop();
@@ -2062,25 +2084,32 @@ function drawSkinsMenu() {
 }
 
 function drawLeaderboardsButton() {
-  let buttonW = 140 * UI_SCALE;
-  let buttonH = 45 * UI_SCALE;
+  // Larger on mobile
+  let buttonW = isMobileDevice() ? 170 * UI_SCALE : 140 * UI_SCALE;
+  let buttonH = isMobileDevice() ? 60 * UI_SCALE : 45 * UI_SCALE;
   let buttonX = width / 2;
   let buttonY = height / 2 + (isPortrait ? 100 : 120) * UI_SCALE; // Same Y as Skins
   
   // Right of Play in landscape, side-by-side with Skins in portrait
   let x = buttonX + (isPortrait ? 80 : 160) * UI_SCALE;
-  let isHovering = mouseOverButton(x, buttonY, buttonW, buttonH);
+  
+  // Larger hit area for mobile
+  let hitPadding = isMobileDevice() ? 15 : 0;
+  let isHovering = mouseX > x - buttonW/2 - hitPadding && 
+                   mouseX < x + buttonW/2 + hitPadding && 
+                   mouseY > buttonY - buttonH/2 - hitPadding && 
+                   mouseY < buttonY + buttonH/2 + hitPadding;
   
   push();
   rectMode(CENTER);
   fill(isHovering ? color(255, 215, 0) : color(180, 150, 0));
   stroke(255, 255, 150);
-  strokeWeight(2);
-  rect(x, buttonY, buttonW, buttonH, 5);
+  strokeWeight(isMobileDevice() ? 3 : 2);
+  rect(x, buttonY, buttonW, buttonH, 8);
   
   fill(0);
   noStroke();
-  textSize(16 * UI_SCALE);
+  textSize(isMobileDevice() ? 15 * UI_SCALE : 16 * UI_SCALE);
   textAlign(CENTER, CENTER);
   textStyle(BOLD);
   text("LEADERBOARD", x, buttonY);
